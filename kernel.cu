@@ -1,4 +1,4 @@
-﻿/*
+/*
 * This program will do a load and store operation on each element of a vector.
 * The access to the vector is strided (where stride 1 = coalesced).
 * It meassures the bandwidth in GB/s for different stride sizes and on
@@ -45,9 +45,10 @@ inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort =
 
 
 // GPU kernel which access an vector with a strdie pattern
-__global__ void strided_kernel(int* vec, int size, int stride)
-{
+__global__ void strided_kernel(int* vec, int size, int stride){
     //ToDo: Implement the strided kernel vec[i] = vec[i] + 1 
+    int idx = ((blockDim.x * blockIdx.x + threadIdx.x) * stride) % size;
+    vec[idx] = vec[idx] + 1;
 }
 
 
@@ -68,16 +69,17 @@ void gpu_stride_loop(int* device_vec, int size)
     // Warm up GPU (The first kernel of a program has more overhead than the followings)
     gpuErrCheck(cudaEventRecord(startEvent, 0));
     strided_kernel <<<size / blockSize, blockSize >>> (device_vec, size, 1);
-    gpuErrCheck(cudaEventRecord(stopEvent, 0));
-    gpuErrCheck(cudaEventSynchronize(stopEvent));
-
-    gpuErrCheck(cudaEventElapsedTime(&ms, startEvent, stopEvent));
-    cout << "GPU warmup kernel: " << processedMB / ms << "GB/s bandwidth" << endl;
-
+ 
     // ToDo: Implement the strided loop analogue the CPU implementation
     //       Calculate and print the used Bandwidth
     //       No need to reset the device_vec to 1, we are not interessted in the result
-
+    for (int stride = 1; stride <= 32; stride++) {
+        gpuErrCheck(cudaEventRecord(stopEvent, 0));
+        strided_kernel << <size / blockSize, blockSize >> > (device_vec, size, stride);
+        gpuErrCheck(cudaEventSynchronize(stopEvent));
+        gpuErrCheck(cudaEventElapsedTime(&ms, startEvent, stopEvent));
+        cout << "GPU warmup kernel: " << processedMB / ms << "GB/s bandwidth" << endl;
+    }
 }
 
 
